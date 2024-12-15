@@ -36,6 +36,7 @@ const io = socketio(expressServer, {
     origin: [
       "http://localhost:5173",
       "http://192.168.29.194:5173", //if using a phone or another computer
+      process.env.FRONTEND_URI,
     ],
     methods: ["GET", "POST"],
   },
@@ -49,12 +50,19 @@ io.on("connection", (socket) => {
   socket.on("room:join", (data) => {
     const { email, room } = data;
     roomId = room;
-    // console.log("yoo somebody wants to join room", email, data);
+    // console.log("yoo somebody wants to join room", socket.id);
     emailToSocketIdMap.set(email, socket.id);
     socketidToEmailMap.set(socket.id, email);
-    io.to(room).emit("user:joined", { email, id: socket.id });
-    socket.join(room);
-    io.to(socket.id).emit("room:join", data);
+
+    // check if this rejoining
+    if (socket.rooms.has(roomId)) {
+      console.log("already in this room");
+      //
+    } else {
+      io.to(room).emit("user:joined", { email, id: socket.id });
+      socket.join(room);
+      io.to(socket.id).emit("room:join", data);
+    }
   });
 
   // incoming call
@@ -82,7 +90,22 @@ io.on("connection", (socket) => {
     io.to(to).emit("send:stream");
   });
 
+  // changes in video visibility
+  socket.on("my:video:stopped", ({ to }) => {
+    io.to(to).emit("remote:video:stopped", { from: socket.id });
+  });
+  socket.on("my:video:restarted", ({ to }) => {
+    io.to(to).emit("remote:video:restarted", { from: socket.id });
+  });
+
   // disconnection
+
+  socket.on("leave:room", ({ roomId }) => {
+    socket.leave(roomId);
+    console.log(roomId);
+    io.to(roomId).emit("user:left", this.id + "left");
+  });
+
   socket.on("disconnecting", function () {
     io.to(roomId).emit("user:left", this.id + "left");
   });
