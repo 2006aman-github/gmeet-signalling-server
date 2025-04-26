@@ -9,7 +9,16 @@ const key = fs.readFileSync("cert.key", "utf-8");
 const cert = fs.readFileSync("cert.crt", "utf-8");
 const cors = require("cors");
 const { randomStr } = require("./utils");
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(
+  cors({
+    origin: "*",
+    // origin: [
+    //   "http://localhost:5173",
+    //   "http://192.168.29.177:5173/",
+    //   process.env.FRONTEND_URI,
+    // ],
+  })
+);
 
 app.get("/test", (req, res) => {
   res.send({ message: "hey" });
@@ -33,11 +42,12 @@ const expressServer = http.createServer(app); //
 // create our socket.io server... it will listen to our express port
 const io = socketio(expressServer, {
   cors: {
-    origin: [
-      "http://localhost:5173",
-      "http://192.168.29.194:5173", //if using a phone or another computer
-      process.env.FRONTEND_URI,
-    ],
+    origin: "*",
+    // origin: [
+    //   "http://192.168.29.177:5173/", //if using a phone or another computer
+    //   "http://localhost:5173",
+    //   //process.env.FRONTEND_URI,
+    // ],
     methods: ["GET", "POST"],
   },
 });
