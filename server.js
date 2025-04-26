@@ -8,7 +8,7 @@ const port = 8181;
 const key = fs.readFileSync("cert.key", "utf-8");
 const cert = fs.readFileSync("cert.crt", "utf-8");
 const cors = require("cors");
-const { randomStr } = require("./utils");
+const { randomStr, checkName, checkRoomId } = require("./utils");
 app.use(
   cors({
     origin: "*",
@@ -54,22 +54,58 @@ const io = socketio(expressServer, {
 const emailToSocketIdMap = new Map();
 const socketidToEmailMap = new Map();
 
+const checkJoinDetails = (name, room) => {
+  if (checkName(name) && checkRoomId(room)) {
+    return true;
+  } else {
+    return false;
+  }
+};
+
 io.on("connection", (socket) => {
   // console.log(`user connected ${socket.id}`);
   let roomId;
-  socket.on("room:join", (data) => {
-    const { email, room } = data;
-    roomId = room;
-    // console.log("yoo somebody wants to join room", socket.id);
-    emailToSocketIdMap.set(email, socket.id);
-    socketidToEmailMap.set(socket.id, email);
+  socket.on("room:create", (data) => {
+    const { name, room } = data;
 
-    // check if this rejoining
-    if (socket.rooms.has(roomId)) {
+    // name must be above 3 and room id exactly equal to 10 chars
+    if (!checkJoinDetails(name, room)) {
+      io.to(socket.id).emit("error:message", {
+        message:
+          "name and room ID length shall not be less than 3 and 10 chars respectively.",
+      });
+    } else if (socket.rooms.has(roomId)) {
+      io.to(socket.id).emit("error:message", {
+        message: "room already exists with this ID",
+      });
+    } else {
+      socket.join(room);
+      io.to(socket.id).emit("room:join", data);
+    }
+  });
+  socket.on("room:join", (data) => {
+    const { name, room } = data;
+    roomId = room;
+    console.log("yoo somebody wants to join " + room + " room  => ", socket.id);
+    emailToSocketIdMap.set(name, socket.id);
+    socketidToEmailMap.set(socket.id, name);
+    // if (!io.socket.adapter.rooms.has(room)) {
+    //   io.to(socket.id).emit("room:notfound", { message: "Room Not found" });
+    // }
+
+    if (!checkJoinDetails(name, room)) {
+      io.to(socket.id).emit("error:message", {
+        message:
+          "name and room ID length shall not be less than 3 and 10 chars respectively.",
+      });
+    }
+
+    // check if its rejoining
+    else if (socket.rooms.has(roomId)) {
       console.log("already in this room");
       //
     } else {
-      io.to(room).emit("user:joined", { email, id: socket.id });
+      io.to(room).emit("user:joined", { name, id: socket.id });
       socket.join(room);
       io.to(socket.id).emit("room:join", data);
     }
@@ -80,8 +116,8 @@ io.on("connection", (socket) => {
     io.to(to).emit("incoming:call", { from: socket.id, offer });
   });
 
-  socket.on("caller:join:complete", ({ to }) => {
-    io.to(to).emit("caller:join:complete", { id: socket.id });
+  socket.on("caller:join:complete", ({ to, name }) => {
+    io.to(to).emit("caller:join:complete", { id: socket.id, name });
   });
 
   socket.on("call:accepted", ({ to, ans }) => {
@@ -108,11 +144,21 @@ io.on("connection", (socket) => {
     io.to(to).emit("remote:video:restarted", { from: socket.id });
   });
 
+  // changes in audio
+  socket.on("my:audio:stopped", ({ to }) => {
+    io.to(to).emit("remote:audio:stopped", { from: socket.id });
+  });
+  socket.on("my:audio:restarted", ({ to }) => {
+    io.to(to).emit("remote:audio:restarted", { from: socket.id });
+  });
+
   // disconnection
 
-  socket.on("leave:room", ({ roomId }) => {
+  socket.on("room:leave", ({ roomId }) => {
     socket.leave(roomId);
-    console.log(roomId);
+    io.to(socket.id).emit("room:left");
+
+    // console.log(roomId);
     io.to(roomId).emit("user:left", this.id + "left");
   });
 
