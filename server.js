@@ -80,13 +80,18 @@ io.on("connection", (socket) => {
       });
     } else {
       socket.join(room);
-      io.to(socket.id).emit("room:join", data);
+      io.to(socket.id).emit("room:join", { ...data, otherSockets: [] });
     }
   });
   socket.on("room:join", (data) => {
     const { name, room } = data;
     roomId = room;
-    console.log("yoo somebody wants to join " + room + " room  => ", socket.id);
+    // console.log(
+    //   "yoo ",
+    //   name,
+    //   " wants to join " + room + " room  => ",
+    //   socket.id
+    // );
     emailToSocketIdMap.set(name, socket.id);
     socketidToEmailMap.set(socket.id, name);
     // if (!io.socket.adapter.rooms.has(room)) {
@@ -105,19 +110,22 @@ io.on("connection", (socket) => {
       console.log("already in this room");
       //
     } else {
-      io.to(room).emit("user:joined", { name, id: socket.id });
+      let otherSockets = Array.from(io.sockets.adapter.rooms.get(room) || []);
+      console.log("other sockets: ", otherSockets);
+      socket.broadcast.to(room).emit("user:joined", { name, id: socket.id });
       socket.join(room);
-      io.to(socket.id).emit("room:join", data);
+      io.to(socket.id).emit("room:join", { name, room, otherSockets });
     }
+  });
+
+  socket.on("caller:join:complete", ({ to, name }) => {
+    console.log("we have the dude named: ", name);
+    io.to(to).emit("caller:join:complete", { id: socket.id, name });
   });
 
   // incoming call
   socket.on("user:call", ({ to, offer }) => {
     io.to(to).emit("incoming:call", { from: socket.id, offer });
-  });
-
-  socket.on("caller:join:complete", ({ to, name }) => {
-    io.to(to).emit("caller:join:complete", { id: socket.id, name });
   });
 
   socket.on("call:accepted", ({ to, ans }) => {
@@ -137,19 +145,24 @@ io.on("connection", (socket) => {
   });
 
   // changes in video visibility
-  socket.on("my:video:stopped", ({ to }) => {
-    io.to(to).emit("remote:video:stopped", { from: socket.id });
+  socket.on("my:video:stopped", ({ room }) => {
+    console.log(room, "stopped video");
+    socket.broadcast.to(room).emit("remote:video:stopped", { from: socket.id });
   });
-  socket.on("my:video:restarted", ({ to }) => {
-    io.to(to).emit("remote:video:restarted", { from: socket.id });
+  socket.on("my:video:restarted", ({ room }) => {
+    socket.broadcast
+      .to(room)
+      .emit("remote:video:restarted", { from: socket.id });
   });
 
   // changes in audio
-  socket.on("my:audio:stopped", ({ to }) => {
-    io.to(to).emit("remote:audio:stopped", { from: socket.id });
+  socket.on("my:audio:stopped", ({ room }) => {
+    socket.broadcast.to(room).emit("remote:audio:stopped", { from: socket.id });
   });
-  socket.on("my:audio:restarted", ({ to }) => {
-    io.to(to).emit("remote:audio:restarted", { from: socket.id });
+  socket.on("my:audio:restarted", ({ room }) => {
+    socket.broadcast
+      .to(room)
+      .emit("remote:audio:restarted", { from: socket.id });
   });
 
   // disconnection
@@ -159,11 +172,11 @@ io.on("connection", (socket) => {
     io.to(socket.id).emit("room:left");
 
     // console.log(roomId);
-    io.to(roomId).emit("user:left", this.id + "left");
+    socket.broadcast.to(roomId).emit("user:left", { id: socket.id });
   });
 
   socket.on("disconnecting", function () {
-    io.to(roomId).emit("user:left", this.id + "left");
+    io.to(roomId).emit("user:left", { id: socket.id });
   });
 });
 
