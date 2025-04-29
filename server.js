@@ -120,7 +120,10 @@ io.on("connection", (socket) => {
 
   socket.on("caller:join:complete", ({ to, name }) => {
     console.log("we have the dude named: ", name);
-    io.to(to).emit("caller:join:complete", { id: socket.id, name });
+    io.to(to).emit("caller:join:complete", {
+      id: socket.id,
+      name,
+    });
   });
 
   // incoming call
@@ -141,7 +144,7 @@ io.on("connection", (socket) => {
     io.to(to).emit("peer:nego:final", { from: socket.id, ans });
   });
   socket.on("ask:for:stream", ({ to }) => {
-    io.to(to).emit("send:stream");
+    io.to(to).emit("send:stream", { from: socket.id });
   });
 
   // changes in video visibility
