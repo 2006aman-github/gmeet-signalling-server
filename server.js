@@ -168,6 +168,12 @@ io.on("connection", (socket) => {
       .emit("remote:audio:restarted", { from: socket.id });
   });
 
+  // chat 
+  socket.on("chat:send", ({name, message, room, time}) => {
+    console.log('got a message from ', socket.id)
+io.to(room).emit("chat:new", {name, from: socket.id, message, time})
+  })
+
   // disconnection
 
   socket.on("room:leave", ({ roomId }) => {
